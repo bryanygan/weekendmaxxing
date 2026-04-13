@@ -49,10 +49,16 @@ class HotelAgent:
             f"Extract every accommodation listing from this {source} search results text.\n"
             f"City: {city}, Check-in: {checkin}, Check-out: {checkout}\n\n"
             f"For each listing return a JSON object with these exact keys:\n"
-            f"  name (string), price_per_night (number, USD), total_price (number, USD),\n"
-            f"  rating (number, normalize to 5.0 scale), review_count (number),\n"
+            f"  name (string),\n"
+            f"  price_per_night (number, USD, just the number like 89),\n"
+            f"  total_price (number, USD, total for the stay like 178),\n"
+            f"  rating (number, on a 5.0 scale — just the number like 4.5, NOT \"4.5/5\"),\n"
+            f"  review_count (number),\n"
             f'  type ("hotel" | "hostel" | "apartment" | "other"),\n'
-            f"  neighborhood (string or null), source (\"{source}\")\n\n"
+            f"  neighborhood (string or null),\n"
+            f"  source (\"{source}\")\n\n"
+            f"IMPORTANT: All number fields must be plain numbers, NOT strings.\n"
+            f"Rating must be a single number on a 5-point scale (e.g. 4.2, not \"4.2/5\").\n\n"
             f"Page text (trimmed):\n{raw[:3500]}"
         )
 
