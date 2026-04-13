@@ -1,15 +1,70 @@
-"""Google Flights scraper — extracts flight data via Playwright."""
+"""Google Flights scraper — fetches search results page text via Playwright."""
 
-from typing import Any
+import asyncio
+
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 
 
-class GoogleFlightsScraper:
-    """Scrape Google Flights search results using a headless browser.
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
 
-    Navigates to Google Flights, enters route and date parameters,
-    and extracts price, duration, layover, and schedule data.
+STEALTH_ARGS = [
+    "--no-sandbox",
+    "--disable-blink-features=AutomationControlled",
+    "--disable-dev-shm-usage",
+]
+
+
+def build_url(origin: str, dest_iata: str, outbound_date: str, return_date: str) -> str:
+    """Construct a Google Flights search URL for the given route and dates."""
+    return (
+        f"https://www.google.com/travel/flights/search"
+        f"?q=Flights+from+{origin}+to+{dest_iata}"
+        f"+on+{outbound_date}+returning+{return_date}"
+    )
+
+
+async def fetch_raw(origin: str, dest_iata: str, outbound_date: str, return_date: str) -> str:
+    """Launch a headless browser, navigate to Google Flights, and return body text.
+
+    Returns an empty string on captcha detection or navigation timeout.
     """
+    url = build_url(origin, dest_iata, outbound_date, return_date)
+    browser = None
 
-    def scrape(self, origin: str, destination: str, depart_date: str, return_date: str) -> list[dict[str, Any]]:
-        """Return raw flight result dicts scraped from Google Flights."""
-        pass
+    async with async_playwright() as pw:
+        try:
+            browser = await pw.chromium.launch(
+                headless=True,
+                args=STEALTH_ARGS,
+            )
+            context = await browser.new_context(
+                user_agent=USER_AGENT,
+                viewport={"width": 1280, "height": 800},
+            )
+            page = await context.new_page()
+
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            except PlaywrightTimeout:
+                print(f"[google_flights] WARNING: navigation timed out for {url}")
+                return ""
+
+            await asyncio.sleep(4)
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await asyncio.sleep(2)
+
+            text = await page.inner_text("body")
+
+            if any(kw in text.lower() for kw in ("detected unusual traffic", "captcha")):
+                print(f"[google_flights] WARNING: anti-bot page detected for {dest_iata}")
+                return ""
+
+            return text
+
+        finally:
+            if browser:
+                await browser.close()
