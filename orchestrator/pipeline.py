@@ -12,6 +12,7 @@ from agents.flight_agent import FlightAgent
 from agents.hotel_agent import HotelAgent
 from agents.recommendation_agent import RecommendationAgent
 from notifications.desktop_notify import notify_deals
+from notifications.email_notify import notify_deals_email
 from notifications.local_dashboard import render_no_deals_page, write_dashboard
 from orchestrator.deal_scorer import score_deal
 from orchestrator.state_manager import (
@@ -119,9 +120,10 @@ def run_pipeline(aggressive: bool = False) -> dict:
 
         write_dashboard(top_deals)
 
-        # 14.5 Desktop notification for new deals
+        # 14.5 Notifications for new deals
         if new_deals:
             notify_deals(new_deals)
+            notify_deals_email(new_deals)
 
         # 15. Log summary
         print(

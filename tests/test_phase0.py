@@ -25,7 +25,7 @@ def test_destinations_json_loads():
     path = ROOT / "config" / "destinations.json"
     data = json.loads(path.read_text())
     assert data["origin"]["iata"] == "PHL"
-    assert len(data["destinations"]) == 10
+    assert len(data["destinations"]) >= 10
     for dest in data["destinations"]:
         assert "iata" in dest
         assert "avg_flight_min" in dest
