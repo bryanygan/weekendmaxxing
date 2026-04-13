@@ -116,7 +116,7 @@ class TrainAgent:
     def passes_constraints(self, train: dict) -> bool:
         """Return True if the train meets budget and timing constraints."""
         required = ["price_usd", "outbound_depart", "outbound_date", "return_arrive"]
-        if any(k not in train for k in required):
+        if any(k not in train or train[k] is None for k in required):
             return False
 
         c = self.constraints

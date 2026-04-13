@@ -125,19 +125,30 @@ class FlightAgent:
             "price_usd", "layovers", "outbound_depart", "outbound_date",
             "return_arrive",
         ]
-        if any(k not in flight for k in required):
+        if any(k not in flight or not flight[k] for k in required):
             return False
 
         c = self.constraints
 
-        if flight["price_usd"] > c["budget"]["max_flight_roundtrip"]:
+        try:
+            price = float(flight["price_usd"])
+        except (ValueError, TypeError):
+            return False
+        if price > c["budget"]["max_flight_roundtrip"]:
             return False
 
-        if flight["layovers"] > c["preferences"]["max_layovers"]:
+        try:
+            layovers = int(flight["layovers"])
+        except (ValueError, TypeError):
+            return False
+        if layovers > c["preferences"]["max_layovers"]:
             return False
 
-        depart = flight["outbound_depart"]
-        day_of_week = datetime.strptime(flight["outbound_date"], "%Y-%m-%d").strftime("%A")
+        depart = str(flight["outbound_depart"])
+        try:
+            day_of_week = datetime.strptime(str(flight["outbound_date"]), "%Y-%m-%d").strftime("%A")
+        except (ValueError, TypeError):
+            return False
 
         if day_of_week == "Friday" and depart < "17:00":
             return False
