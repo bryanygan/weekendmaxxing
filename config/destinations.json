@@ -1,0 +1,18 @@
+{
+  "origin": {
+    "city": "Philadelphia",
+    "iata": "PHL"
+  },
+  "destinations": [
+    {"city": "Miami",         "iata": "MIA", "avg_flight_min": 180},
+    {"city": "Chicago",       "iata": "ORD", "avg_flight_min": 140},
+    {"city": "Boston",        "iata": "BOS", "avg_flight_min":  80},
+    {"city": "Atlanta",       "iata": "ATL", "avg_flight_min": 150},
+    {"city": "Charlotte",     "iata": "CLT", "avg_flight_min": 110},
+    {"city": "Nashville",     "iata": "BNA", "avg_flight_min": 145},
+    {"city": "Orlando",       "iata": "MCO", "avg_flight_min": 165},
+    {"city": "Washington DC", "iata": "DCA", "avg_flight_min":  60},
+    {"city": "Detroit",       "iata": "DTW", "avg_flight_min": 120},
+    {"city": "Pittsburgh",    "iata": "PIT", "avg_flight_min":  70}
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "budget": {
+    "max_total_usd": 500,
+    "max_flight_usd": 300,
+    "max_hotel_per_night_usd": 150
+  },
+  "timing": {
+    "outbound_windows": [
+      {"day": "Friday",   "earliest": "17:00", "latest": "23:59"},
+      {"day": "Saturday", "earliest": "05:00", "latest": "09:00"}
+    ],
+    "return_window": {
+      "day": "Sunday",
+      "earliest": "17:00",
+      "latest": "22:00"
+    }
+  },
+  "min_hours_at_dest": 24,
+  "max_layovers": 1,
+  "hotel_min_rating": 3.5
+}

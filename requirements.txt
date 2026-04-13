@@ -1,0 +1,4 @@
+playwright>=1.40
+apscheduler>=3.10
+requests>=2.31
+pytest>=7.4
