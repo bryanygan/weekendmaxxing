@@ -41,7 +41,7 @@ def _full_mock_patches(flight_result=None, hotel_result=None, score_val=70):
         hotel_result = [_mock_enriched()]
 
     return [
-        patch("orchestrator.pipeline.asyncio.run", side_effect=[flight_result, hotel_result]),
+        patch("orchestrator.pipeline.asyncio.run", side_effect=[flight_result, [], hotel_result]),
         patch("orchestrator.pipeline.CostAgent") if score_val else patch("orchestrator.pipeline.CostAgent"),
         patch("orchestrator.pipeline.score_deal", return_value=score_val),
         patch("orchestrator.pipeline.RecommendationAgent"),
@@ -83,7 +83,7 @@ def test_pipeline_aborts_on_no_flights():
 
 def test_pipeline_aborts_on_no_hotels():
     flights = [_mock_flight()]
-    with patch("orchestrator.pipeline.asyncio.run", side_effect=[flights, []]), \
+    with patch("orchestrator.pipeline.asyncio.run", side_effect=[flights, [], []]), \
          patch("orchestrator.pipeline.render_no_deals_page"), \
          patch("orchestrator.pipeline.log_run"), \
          patch("orchestrator.pipeline.init_db"):
@@ -98,7 +98,7 @@ def test_pipeline_filters_by_score_threshold(monkeypatch):
     scores = [80, 60, 40]
     score_iter = iter(scores)
 
-    with patch("orchestrator.pipeline.asyncio.run", side_effect=[[_mock_flight()], deals]), \
+    with patch("orchestrator.pipeline.asyncio.run", side_effect=[[_mock_flight()], [], deals]), \
          patch("orchestrator.pipeline.CostAgent") as mock_cost, \
          patch("orchestrator.pipeline.score_deal", side_effect=lambda d, c: next(score_iter)), \
          patch("orchestrator.pipeline.RecommendationAgent") as mock_rec, \
@@ -127,7 +127,7 @@ def test_pipeline_deduplicates():
 
 
 def test_pipeline_saves_new_deals():
-    with patch("orchestrator.pipeline.asyncio.run", side_effect=[[_mock_flight()], [_mock_enriched()]]), \
+    with patch("orchestrator.pipeline.asyncio.run", side_effect=[[_mock_flight()], [], [_mock_enriched()]]), \
          patch("orchestrator.pipeline.CostAgent") as mock_cost, \
          patch("orchestrator.pipeline.score_deal", return_value=70), \
          patch("orchestrator.pipeline.RecommendationAgent") as mock_rec, \
@@ -144,7 +144,7 @@ def test_pipeline_saves_new_deals():
 
 
 def test_pipeline_calls_dashboard():
-    with patch("orchestrator.pipeline.asyncio.run", side_effect=[[_mock_flight()], [_mock_enriched()]]), \
+    with patch("orchestrator.pipeline.asyncio.run", side_effect=[[_mock_flight()], [], [_mock_enriched()]]), \
          patch("orchestrator.pipeline.CostAgent") as mock_cost, \
          patch("orchestrator.pipeline.score_deal", return_value=70), \
          patch("orchestrator.pipeline.RecommendationAgent") as mock_rec, \
@@ -171,7 +171,7 @@ def test_pipeline_handles_exception():
 
 
 def test_pipeline_logs_run():
-    with patch("orchestrator.pipeline.asyncio.run", side_effect=[[_mock_flight()], [_mock_enriched()]]), \
+    with patch("orchestrator.pipeline.asyncio.run", side_effect=[[_mock_flight()], [], [_mock_enriched()]]), \
          patch("orchestrator.pipeline.CostAgent") as mock_cost, \
          patch("orchestrator.pipeline.score_deal", return_value=70), \
          patch("orchestrator.pipeline.RecommendationAgent") as mock_rec, \

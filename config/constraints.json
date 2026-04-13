@@ -3,6 +3,7 @@
     "max_total_usd": 500,
     "max_flight_usd": 300,
     "max_flight_roundtrip": 300,
+    "max_train_roundtrip": 200,
     "max_hotel_per_night_usd": 150
   },
   "timing": {
@@ -18,7 +19,8 @@
     "min_hours_at_destination": 24
   },
   "preferences": {
-    "max_layovers": 1
+    "max_layovers": 1,
+    "max_train_stops": 2
   },
   "min_hours_at_dest": 24,
   "max_layovers": 1,

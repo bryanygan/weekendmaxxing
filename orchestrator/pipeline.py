@@ -11,6 +11,7 @@ from agents.cost_agent import CostAgent
 from agents.flight_agent import FlightAgent
 from agents.hotel_agent import HotelAgent
 from agents.recommendation_agent import RecommendationAgent
+from agents.train_agent import TrainAgent
 from notifications.desktop_notify import notify_deals
 from notifications.email_notify import notify_deals_email
 from notifications.local_dashboard import render_no_deals_page, write_dashboard
@@ -52,6 +53,7 @@ def run_pipeline(aggressive: bool = False) -> dict:
 
         # 4. Instantiate agents
         flight_agent = FlightAgent(constraints)
+        train_agent = TrainAgent(constraints)
         hotel_agent = HotelAgent(constraints)
         cost_agent = CostAgent()
         rec_agent = RecommendationAgent()
@@ -59,16 +61,25 @@ def run_pipeline(aggressive: bool = False) -> dict:
         # 5. Flight search
         print("[Pipeline] Running flight search...")
         flight_deals = asyncio.run(flight_agent.run(destinations))
-        if not flight_deals:
-            print("[Pipeline] No valid flights found. Aborting.")
+
+        # 5.5 Train search (Amtrak + SEPTA)
+        print("[Pipeline] Running train search...")
+        train_deals = asyncio.run(train_agent.run(destinations))
+
+        # Merge all transport options
+        all_transport = flight_deals + train_deals
+        if not all_transport:
+            print("[Pipeline] No valid flights or trains found. Aborting.")
             render_no_deals_page()
             summary["finished_at"] = datetime.now().isoformat()
             log_run(started_at, summary["finished_at"], 0, 0)
             return summary
 
+        print(f"[Pipeline] {len(flight_deals)} flights + {len(train_deals)} trains = {len(all_transport)} transport options")
+
         # 6. Hotel search
         print("[Pipeline] Running hotel search...")
-        enriched_deals = asyncio.run(hotel_agent.run(flight_deals))
+        enriched_deals = asyncio.run(hotel_agent.run(all_transport))
         if not enriched_deals:
             print("[Pipeline] No hotels found. Aborting.")
             render_no_deals_page()
@@ -101,7 +112,7 @@ def run_pipeline(aggressive: bool = False) -> dict:
 
         summary["deals_found"] = len(top_deals)
 
-        # 12.5 Record price history for all scored deals
+        # 12.5 Record price history
         for deal in top_deals:
             record_price(deal)
             drop = get_price_drop(deal)
@@ -120,14 +131,14 @@ def run_pipeline(aggressive: bool = False) -> dict:
 
         write_dashboard(top_deals)
 
-        # 14.5 Notifications for new deals
+        # 14.5 Notifications
         if new_deals:
             notify_deals(new_deals)
             notify_deals_email(new_deals)
 
         # 15. Log summary
         print(
-            f"[Pipeline] {len(flight_deals)} flights -> "
+            f"[Pipeline] {len(flight_deals)} flights + {len(train_deals)} trains -> "
             f"{len(enriched_deals)} with hotels -> "
             f"{len(scored)} scored -> "
             f"{len(new_deals)} new"

@@ -102,7 +102,7 @@ def test_full_pipeline_end_to_end(mock_call_llm, tmp_path):
 
     dash_path = str(tmp_path / "dashboard.html")
 
-    with patch("orchestrator.pipeline.asyncio.run", side_effect=[flights, enriched]), \
+    with patch("orchestrator.pipeline.asyncio.run", side_effect=[flights, [], enriched]), \
          patch("orchestrator.pipeline.CostAgent") as mock_cost, \
          patch("orchestrator.pipeline.RecommendationAgent") as mock_rec, \
          patch("orchestrator.pipeline.write_dashboard",
@@ -198,7 +198,7 @@ def test_no_duplicate_notification(mock_call_llm, tmp_path):
     dash_path = str(tmp_path / "dashboard.html")
 
     def run_once():
-        with patch("orchestrator.pipeline.asyncio.run", side_effect=[flights, enriched]), \
+        with patch("orchestrator.pipeline.asyncio.run", side_effect=[flights, [], enriched]), \
              patch("orchestrator.pipeline.CostAgent") as mc, \
              patch("orchestrator.pipeline.RecommendationAgent") as mr, \
              patch("orchestrator.pipeline.write_dashboard",
@@ -220,7 +220,7 @@ def test_pipeline_resilient_to_partial_scrape_failure(mock_call_llm, tmp_path):
     enriched = [_make_enriched()]
     dash_path = str(tmp_path / "dashboard.html")
 
-    with patch("orchestrator.pipeline.asyncio.run", side_effect=[flights, enriched]), \
+    with patch("orchestrator.pipeline.asyncio.run", side_effect=[flights, [], enriched]), \
          patch("orchestrator.pipeline.CostAgent") as mc, \
          patch("orchestrator.pipeline.RecommendationAgent") as mr, \
          patch("orchestrator.pipeline.write_dashboard",

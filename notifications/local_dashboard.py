@@ -54,10 +54,13 @@ def _render_card(deal: dict) -> str:
     dest = deal.get("destination", "Unknown")
     outbound = deal.get("outbound_date", "")
     ret = deal.get("return_date", "")
-    airline = deal.get("airline", "")
+    is_train = deal.get("transport_type") == "train"
+    transport_icon = "\U0001f682" if is_train else "\u2708\ufe0f"
+    transport_label = "Train" if is_train else "Flight"
+    airline = deal.get("airline", deal.get("operator", ""))
     price_usd = deal.get("price_usd", 0)
     layovers = deal.get("layovers", 0)
-    stops = "Nonstop" if layovers == 0 else f"{layovers} stop{'s' if layovers > 1 else ''}"
+    stops = "Direct" if is_train and layovers == 0 else ("Nonstop" if layovers == 0 else f"{layovers} stop{'s' if layovers > 1 else ''}")
     od = deal.get("outbound_depart", "")
     oa = deal.get("outbound_arrive", "")
     rd = deal.get("return_depart", "")
@@ -93,7 +96,7 @@ def _render_card(deal: dict) -> str:
         <span class="badge" style="background:{color};">{score}</span>
       </div>
       <div class="meta">{outbound} &rarr; {ret} &middot; {timing}</div>
-      <div class="line"><span class="label">Flight:</span>
+      <div class="line"><span class="label">{transport_icon} {transport_label}:</span>
         <span class="mono">${price_usd:.0f} &middot; {airline} &middot; {stops} &middot; {od}&rarr;{oa} / {rd}&rarr;{ra}</span>
       </div>
       <div class="line"><span class="label">Hotel:</span>
