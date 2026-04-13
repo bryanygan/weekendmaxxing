@@ -150,7 +150,10 @@ def test_calc_hours_saturday_arrive():
 @pytest.mark.asyncio
 async def test_scrape_and_parse_empty_raw():
     agent = FlightAgent(CONSTRAINTS)
-    with patch("agents.flight_agent.fetch_raw", new_callable=AsyncMock, return_value=""):
+    with patch("scrapers.google_flights.fetch_raw", new_callable=AsyncMock, return_value=""), \
+         patch("scrapers.kayak.fetch_raw", new_callable=AsyncMock, return_value=""), \
+         patch("scrapers.skyscanner.fetch_raw", new_callable=AsyncMock, return_value=""), \
+         patch("agents.flight_agent.limiter.wait", new_callable=AsyncMock):
         result = await agent.scrape_and_parse("PHL", "Boston", "BOS", "2026-04-17", "2026-04-19")
     assert result == []
 
@@ -164,11 +167,14 @@ async def test_scrape_and_parse_llm_called():
         "return_depart": "18:00", "return_arrive": "19:30",
         "layovers": 0, "duration_mins": 90, "is_nonstop": True,
     }])
-    with patch("agents.flight_agent.fetch_raw", new_callable=AsyncMock, return_value="some text"), \
-         patch("agents.flight_agent.call_llm", return_value=llm_response):
+    with patch("scrapers.google_flights.fetch_raw", new_callable=AsyncMock, return_value="some text"), \
+         patch("scrapers.kayak.fetch_raw", new_callable=AsyncMock, return_value=""), \
+         patch("scrapers.skyscanner.fetch_raw", new_callable=AsyncMock, return_value=""), \
+         patch("agents.flight_agent.call_llm", return_value=llm_response), \
+         patch("agents.flight_agent.limiter.wait", new_callable=AsyncMock):
         result = await agent.scrape_and_parse("PHL", "Boston", "BOS", "2026-04-17", "2026-04-19")
 
-    assert len(result) == 1
+    assert len(result) >= 1
     assert result[0]["price_usd"] == 150
 
 

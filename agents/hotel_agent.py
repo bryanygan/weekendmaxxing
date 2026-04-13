@@ -1,8 +1,10 @@
-"""Hotel agent — scrapes Booking.com and uses LLM to extract structured data."""
+"""Hotel agent — scrapes Booking.com and Airbnb, uses LLM to extract structured data."""
 
-from scrapers.booking import fetch_raw
+import scrapers.airbnb as airbnb
+import scrapers.booking as booking
 from utils.json_extractor import extract_json
 from utils.llm import call_llm
+from utils.rate_limiter import limiter
 
 SYSTEM_PROMPT = (
     "You are a hotel listing extraction agent. Extract all visible "
@@ -10,21 +12,41 @@ SYSTEM_PROMPT = (
     "array. No markdown, no preamble."
 )
 
+STAY_SOURCES = [
+    ("booking.com", booking),
+    ("airbnb", airbnb),
+]
+
 
 class HotelAgent:
-    """Search for hotel options that meet rating and budget requirements."""
+    """Search for hotel and Airbnb options that meet rating and budget requirements."""
 
     def __init__(self, constraints: dict):
         self.constraints = constraints
 
     async def scrape_and_parse(self, city: str, checkin: str, checkout: str, source: str) -> list[dict]:
-        """Fetch raw hotel page text, extract structured data via LLM, filter and normalize."""
-        raw = await fetch_raw(city, checkin, checkout)
+        """Fetch raw page text from a single source, extract structured data via LLM, filter and normalize."""
+        # Determine which module to use
+        source_module = None
+        for name, mod in STAY_SOURCES:
+            if name == source:
+                source_module = mod
+                break
+        if source_module is None:
+            source_module = booking  # fallback
+
+        await limiter.wait(source)
+        try:
+            raw = await source_module.fetch_raw(city, checkin, checkout)
+        except Exception as exc:
+            print(f"[HotelAgent] {source} scrape failed for {city}: {exc}")
+            return []
+
         if not raw:
             return []
 
         user_prompt = (
-            f"Extract every accommodation listing from this search results text.\n"
+            f"Extract every accommodation listing from this {source} search results text.\n"
             f"City: {city}, Check-in: {checkin}, Check-out: {checkout}\n\n"
             f"For each listing return a JSON object with these exact keys:\n"
             f"  name (string), price_per_night (number, USD), total_price (number, USD),\n"
@@ -34,7 +56,12 @@ class HotelAgent:
             f"Page text (trimmed):\n{raw[:3500]}"
         )
 
-        response = call_llm(SYSTEM_PROMPT, user_prompt)
+        try:
+            response = call_llm(SYSTEM_PROMPT, user_prompt)
+        except Exception as exc:
+            print(f"[HotelAgent] LLM failed for {source}/{city}: {exc}")
+            return []
+
         parsed = extract_json(response)
         if isinstance(parsed, dict):
             parsed = [parsed]
@@ -62,7 +89,7 @@ class HotelAgent:
         return results
 
     async def run(self, flight_deals: list[dict]) -> list[dict]:
-        """For each flight deal, find matching hotels and enrich the deal dict."""
+        """For each flight deal, find matching hotels/Airbnbs and enrich the deal dict."""
         enriched = []
 
         for deal in flight_deals:
@@ -70,19 +97,23 @@ class HotelAgent:
             checkin = deal.get("outbound_date", "")
             checkout = deal.get("return_date", "")
 
-            stays = await self.scrape_and_parse(city, checkin, checkout, "booking.com")
+            # Search all accommodation sources
+            all_stays: list[dict] = []
+            for source_name, _ in STAY_SOURCES:
+                stays = await self.scrape_and_parse(city, checkin, checkout, source_name)
+                all_stays.extend(stays)
 
-            if not stays:
+            if not all_stays:
                 print(f"[HotelAgent] No stays for {city} {checkin}, skipping")
                 continue
 
             # Sort by rating desc, then total_price asc
-            stays.sort(key=lambda h: (-h.get("rating", 0), h.get("total_price", 9999)))
+            all_stays.sort(key=lambda h: (-h.get("rating", 0), h.get("total_price", 9999)))
 
-            deal["best_stay"] = stays[0]
-            deal["all_stays"] = stays[:5]
+            deal["best_stay"] = all_stays[0]
+            deal["all_stays"] = all_stays[:5]
             deal["hotel_search_performed"] = True
-            deal["total_trip_cost"] = deal.get("price_usd", 0) + stays[0].get("total_price", 0)
+            deal["total_trip_cost"] = deal.get("price_usd", 0) + all_stays[0].get("total_price", 0)
             enriched.append(deal)
 
         return enriched

@@ -71,6 +71,20 @@ def _render_card(deal: dict) -> str:
     timing = _timing_label(outbound)
     recs = deal.get("recommendations", "")
     all_stays = deal.get("all_stays", [])
+    source = deal.get("source", "")
+    stay_source = best.get("source", "")
+    price_drop = deal.get("price_drop")
+
+    drop_html = ""
+    if price_drop is not None and price_drop > 0:
+        drop_html = f' <span style="color:#22c55e;font-weight:700;">&darr; ${price_drop:.0f} drop</span>'
+    elif price_drop is not None and price_drop < 0:
+        drop_html = f' <span style="color:#ef4444;">&uarr; ${abs(price_drop):.0f} increase</span>'
+
+    source_html = ""
+    if source or stay_source:
+        parts = [s for s in [source, stay_source] if s]
+        source_html = f'<div class="meta">Sources: {" + ".join(parts)}</div>'
 
     return f"""
     <div class="card" style="border-left:4px solid {color};">
@@ -85,8 +99,9 @@ def _render_card(deal: dict) -> str:
       <div class="line"><span class="label">Hotel:</span>
         <span class="mono">{hotel_name} &middot; ${hotel_total:.0f} &middot; {_stars(hotel_rating)}</span>
       </div>
-      <div class="total">Estimated Total: ${est_total:.2f}</div>
+      <div class="total">Estimated Total: ${est_total:.2f}{drop_html}</div>
       <div class="meta">{hours:.1f} hours at destination</div>
+      {source_html}
       <details><summary>Recommendations</summary><pre class="recs">{recs}</pre></details>
       <details><summary>All Stays ({len(all_stays)})</summary>{_render_stays_table(all_stays)}</details>
     </div>"""

@@ -1,16 +1,26 @@
-"""Flight agent — scrapes Google Flights and uses LLM to extract structured data."""
+"""Flight agent — scrapes multiple flight sources and uses LLM to extract structured data."""
 
 from datetime import date, datetime, timedelta
 
-from scrapers.google_flights import fetch_raw
+import scrapers.google_flights as google_flights
+import scrapers.kayak as kayak
+import scrapers.skyscanner as skyscanner
 from utils.json_extractor import extract_json
 from utils.llm import call_llm
+from utils.rate_limiter import limiter
 
 SYSTEM_PROMPT = (
     "You are a flight data extraction agent. Extract all visible "
     "flight options from the given search results page text. Return ONLY a valid "
     "JSON array of flight objects. No markdown, no preamble, no explanation."
 )
+
+# Scrapers to try in order — if one gets blocked, we still get data from others
+FLIGHT_SOURCES = [
+    ("google_flights", google_flights),
+    ("kayak", kayak),
+    ("skyscanner", skyscanner),
+]
 
 
 class FlightAgent:
@@ -29,7 +39,6 @@ class FlightAgent:
         Return day is always the following Sunday. Past dates are excluded.
         """
         today = date.today()
-        # Find the next Friday (weekday 4)
         days_until_friday = (4 - today.weekday()) % 7
         if days_until_friday == 0 and today.weekday() == 4:
             next_friday = today
@@ -59,29 +68,47 @@ class FlightAgent:
         outbound_date: str,
         return_date: str,
     ) -> list[dict]:
-        """Fetch raw flight page text and use the LLM to extract structured data."""
-        raw = await fetch_raw(origin, dest_iata, outbound_date, return_date)
-        if not raw:
-            return []
+        """Fetch raw flight page text from multiple sources and extract structured data."""
+        all_flights: list[dict] = []
 
-        user_prompt = (
-            f"Extract every flight option from this search results text.\n"
-            f"Destination city: {dest_city}, IATA: {dest_iata}\n"
-            f"Outbound date: {outbound_date}, Return date: {return_date}\n\n"
-            f"For each flight return a JSON object with these exact keys:\n"
-            f"  price_usd (number), airline (string), outbound_depart (HH:MM),\n"
-            f"  outbound_arrive (HH:MM), return_depart (HH:MM), return_arrive (HH:MM),\n"
-            f"  layovers (number, 0 if nonstop), duration_mins (number),\n"
-            f"  is_nonstop (bool), destination (string), iata (string),\n"
-            f"  outbound_date (string), return_date (string)\n\n"
-            f"Page text (trimmed):\n{raw[:3500]}"
-        )
+        for source_name, source_module in FLIGHT_SOURCES:
+            await limiter.wait(source_name)
+            try:
+                raw = await source_module.fetch_raw(origin, dest_iata, outbound_date, return_date)
+            except Exception as exc:
+                print(f"[FlightAgent] {source_name} scrape failed for {dest_iata}: {exc}")
+                continue
 
-        response = call_llm(SYSTEM_PROMPT, user_prompt)
-        parsed = extract_json(response)
-        if isinstance(parsed, list):
-            return parsed
-        return [parsed] if isinstance(parsed, dict) else []
+            if not raw:
+                continue
+
+            user_prompt = (
+                f"Extract every flight option from this {source_name} search results text.\n"
+                f"Destination city: {dest_city}, IATA: {dest_iata}\n"
+                f"Outbound date: {outbound_date}, Return date: {return_date}\n\n"
+                f"For each flight return a JSON object with these exact keys:\n"
+                f"  price_usd (number), airline (string), outbound_depart (HH:MM),\n"
+                f"  outbound_arrive (HH:MM), return_depart (HH:MM), return_arrive (HH:MM),\n"
+                f"  layovers (number, 0 if nonstop), duration_mins (number),\n"
+                f"  is_nonstop (bool), destination (string), iata (string),\n"
+                f"  outbound_date (string), return_date (string)\n\n"
+                f"Page text (trimmed):\n{raw[:3500]}"
+            )
+
+            try:
+                response = call_llm(SYSTEM_PROMPT, user_prompt)
+                parsed = extract_json(response)
+                if isinstance(parsed, dict):
+                    parsed = [parsed]
+                if isinstance(parsed, list):
+                    for f in parsed:
+                        if isinstance(f, dict):
+                            f["source"] = source_name
+                            all_flights.append(f)
+            except Exception as exc:
+                print(f"[FlightAgent] LLM parse failed for {source_name}/{dest_iata}: {exc}")
+
+        return all_flights
 
     # ── constraint checking ─────────────────────────────────────────────────
 
@@ -96,15 +123,12 @@ class FlightAgent:
 
         c = self.constraints
 
-        # Budget
         if flight["price_usd"] > c["budget"]["max_flight_roundtrip"]:
             return False
 
-        # Layovers
         if flight["layovers"] > c["preferences"]["max_layovers"]:
             return False
 
-        # Outbound timing
         depart = flight["outbound_depart"]
         day_of_week = datetime.strptime(flight["outbound_date"], "%Y-%m-%d").strftime("%A")
 
@@ -113,11 +137,9 @@ class FlightAgent:
         if day_of_week == "Saturday" and depart > "09:00":
             return False
 
-        # Return timing
         if flight["return_arrive"] > "22:00":
             return False
 
-        # Hours at destination
         hours = self.calc_hours_at_destination(flight)
         if hours < c["timing"]["min_hours_at_destination"]:
             return False

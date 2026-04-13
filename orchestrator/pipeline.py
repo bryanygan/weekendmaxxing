@@ -11,9 +11,12 @@ from agents.cost_agent import CostAgent
 from agents.flight_agent import FlightAgent
 from agents.hotel_agent import HotelAgent
 from agents.recommendation_agent import RecommendationAgent
+from notifications.desktop_notify import notify_deals
 from notifications.local_dashboard import render_no_deals_page, write_dashboard
 from orchestrator.deal_scorer import score_deal
-from orchestrator.state_manager import init_db, is_duplicate, log_run, save_deal
+from orchestrator.state_manager import (
+    get_price_drop, init_db, is_duplicate, log_run, record_price, save_deal,
+)
 
 SCORE_THRESHOLD = float(os.getenv("DEAL_SCORE_THRESHOLD", "55"))
 
@@ -97,6 +100,15 @@ def run_pipeline(aggressive: bool = False) -> dict:
 
         summary["deals_found"] = len(top_deals)
 
+        # 12.5 Record price history for all scored deals
+        for deal in top_deals:
+            record_price(deal)
+            drop = get_price_drop(deal)
+            if drop is not None:
+                deal["price_drop"] = round(drop, 2)
+                if drop > 0:
+                    print(f"[Pipeline] Price DROP: {deal.get('destination')} down ${drop:.0f}")
+
         # 13. Separate new vs seen
         new_deals = [d for d in top_deals if not is_duplicate(d)]
         summary["deals_notified"] = len(new_deals)
@@ -106,6 +118,10 @@ def run_pipeline(aggressive: bool = False) -> dict:
             save_deal(d)
 
         write_dashboard(top_deals)
+
+        # 14.5 Desktop notification for new deals
+        if new_deals:
+            notify_deals(new_deals)
 
         # 15. Log summary
         print(

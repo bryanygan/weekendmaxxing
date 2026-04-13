@@ -31,7 +31,8 @@ def test_build_url_contains_dates():
 @pytest.mark.asyncio
 async def test_scrape_and_parse_empty_raw():
     agent = HotelAgent(CONSTRAINTS)
-    with patch("agents.hotel_agent.fetch_raw", new_callable=AsyncMock, return_value=""):
+    with patch("scrapers.booking.fetch_raw", new_callable=AsyncMock, return_value=""), \
+         patch("agents.hotel_agent.limiter.wait", new_callable=AsyncMock):
         result = await agent.scrape_and_parse("Boston", "2026-04-17", "2026-04-19", "booking.com")
     assert result == []
 
@@ -44,8 +45,9 @@ async def test_scrape_and_parse_filters_low_rating():
         "rating": 2.0, "review_count": 10, "type": "hotel",
         "neighborhood": None, "source": "booking.com",
     }])
-    with patch("agents.hotel_agent.fetch_raw", new_callable=AsyncMock, return_value="text"), \
-         patch("agents.hotel_agent.call_llm", return_value=llm_response):
+    with patch("scrapers.booking.fetch_raw", new_callable=AsyncMock, return_value="text"), \
+         patch("agents.hotel_agent.call_llm", return_value=llm_response), \
+         patch("agents.hotel_agent.limiter.wait", new_callable=AsyncMock):
         result = await agent.scrape_and_parse("Boston", "2026-04-17", "2026-04-19", "booking.com")
     assert len(result) == 0
 
@@ -58,8 +60,9 @@ async def test_scrape_and_parse_normalizes_10pt_rating():
         "rating": 8.4, "review_count": 50, "type": "hotel",
         "neighborhood": "Downtown", "source": "booking.com",
     }])
-    with patch("agents.hotel_agent.fetch_raw", new_callable=AsyncMock, return_value="text"), \
-         patch("agents.hotel_agent.call_llm", return_value=llm_response):
+    with patch("scrapers.booking.fetch_raw", new_callable=AsyncMock, return_value="text"), \
+         patch("agents.hotel_agent.call_llm", return_value=llm_response), \
+         patch("agents.hotel_agent.limiter.wait", new_callable=AsyncMock):
         result = await agent.scrape_and_parse("Boston", "2026-04-17", "2026-04-19", "booking.com")
     assert len(result) == 1
     assert result[0]["rating"] == pytest.approx(4.2)
@@ -73,8 +76,9 @@ async def test_scrape_and_parse_filters_zero_price():
         "rating": 4.0, "review_count": 10, "type": "hotel",
         "neighborhood": None, "source": "booking.com",
     }])
-    with patch("agents.hotel_agent.fetch_raw", new_callable=AsyncMock, return_value="text"), \
-         patch("agents.hotel_agent.call_llm", return_value=llm_response):
+    with patch("scrapers.booking.fetch_raw", new_callable=AsyncMock, return_value="text"), \
+         patch("agents.hotel_agent.call_llm", return_value=llm_response), \
+         patch("agents.hotel_agent.limiter.wait", new_callable=AsyncMock):
         result = await agent.scrape_and_parse("Boston", "2026-04-17", "2026-04-19", "booking.com")
     assert len(result) == 0
 
