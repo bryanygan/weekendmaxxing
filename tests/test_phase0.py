@@ -76,5 +76,5 @@ def test_settings_defaults(monkeypatch):
     importlib.reload(settings_module)
 
     assert settings_module.USE_LOCAL_LLM is True
-    assert settings_module.LOCAL_LLM_URL == "http://localhost:11434/api/generate"
-    assert settings_module.LOCAL_LLM_MODEL == "llama3"
+    assert settings_module.LOCAL_LLM_URL == "http://localhost:11434/api/chat"
+    assert settings_module.LOCAL_LLM_MODEL == "llama3.1:8b"
