@@ -1,0 +1,1062 @@
+Here's the complete phased build plan. Each phase has a specific AI agent prompt, deliverables, and a test checklist you can verify before moving on.
+
+---
+
+# Weekend Deal Hunter — Phased Agent Build Plan
+
+---
+
+## Phase 0 — Project Scaffold & Environment
+
+**Goal:** Repo exists, dependencies install cleanly, Ollama responds to a test call.
+
+### Agent Prompt
+
+```
+You are a project scaffolding agent. Create the full directory and file structure 
+for a Python project called "weekend-deal-hunter" with the following layout:
+
+weekend-deal-hunter/
+├── agents/
+│   ├── __init__.py
+│   ├── flight_agent.py       # stub only
+│   ├── hotel_agent.py        # stub only
+│   ├── cost_agent.py         # stub only
+│   └── recommendation_agent.py  # stub only
+├── orchestrator/
+│   ├── __init__.py
+│   ├── pipeline.py           # stub only
+│   ├── deal_scorer.py        # stub only
+│   └── state_manager.py      # stub only
+├── scrapers/
+│   ├── __init__.py
+│   ├── google_flights.py     # stub only
+│   └── booking.py            # stub only
+├── utils/
+│   ├── __init__.py
+│   ├── llm.py                # stub only
+│   └── json_extractor.py     # stub only
+├── notifications/
+│   ├── __init__.py
+│   └── local_dashboard.py    # stub only
+├── config/
+│   ├── destinations.json
+│   ├── constraints.json
+│   └── settings.py
+├── data/                     # empty, gitignored
+├── tests/
+│   ├── __init__.py
+│   └── test_phase0.py
+├── requirements.txt
+├── scheduler.py              # stub only
+├── .gitignore
+└── README.md
+
+Rules:
+- Every stub file must have the correct imports and a class/function signature 
+  with a single `pass` body and a docstring explaining what it will do.
+- destinations.json must contain PHL as origin and 10 weekend-reachable cities 
+  with IATA codes and avg_flight_min.
+- constraints.json must contain budget caps, timing windows (Friday 17:00–23:59 
+  OR Saturday 05:00–09:00 outbound, Sunday 17:00–22:00 return), min_hours_at_dest=24,
+  max_layovers=1, hotel_min_rating=3.5.
+- settings.py must read USE_LOCAL_LLM=True, LOCAL_LLM_URL, LOCAL_LLM_MODEL from 
+  environment variables with sensible defaults.
+- requirements.txt must include: playwright, apscheduler, requests, pytest.
+- .gitignore must exclude data/, __pycache__, .env, *.db.
+- test_phase0.py must verify: all directories exist, all JSON configs load without 
+  error, all stub files import without error, settings.py loads defaults correctly.
+
+Output every file's full contents in order.
+```
+
+### ✅ Phase 0 Tests — Run Before Proceeding
+
+```bash
+cd weekend-deal-hunter
+pip install -r requirements.txt
+playwright install chromium
+ollama pull llama3.1:8b
+
+# Verify Ollama responds
+curl http://localhost:11434/api/chat -d '{
+  "model": "llama3.1:8b",
+  "messages": [{"role":"user","content":"Reply with the word READY only."}],
+  "stream": false
+}'
+# Expected: {"message":{"content":"READY",...}}
+
+# Run scaffold tests
+pytest tests/test_phase0.py -v
+```
+
+**Expected output:**
+```
+test_directories_exist         PASSED
+test_json_configs_load         PASSED
+test_all_stubs_import          PASSED
+test_settings_loads_defaults   PASSED
+```
+
+**Visible progress:** Project folder is fully navigable, all configs readable, no import errors anywhere.
+
+---
+
+## Phase 1 — LLM Utility Layer
+
+**Goal:** `utils/llm.py` and `utils/json_extractor.py` fully working and tested against the local Ollama instance.
+
+### Agent Prompt
+
+```
+You are implementing the LLM utility layer for a local-first travel deal hunter.
+Implement two files completely:
+
+--- utils/llm.py ---
+Implement a function call_llm(system_prompt, user_prompt, max_tokens=1000) that:
+- POSTs to http://localhost:11434/api/chat (configurable via settings.py)
+- Uses the model from settings.LOCAL_LLM_MODEL (default: "llama3.1:8b")
+- Sets stream=False
+- Returns the string content of the response message
+- Raises a descriptive RuntimeError if the HTTP response is not 200
+- Raises a descriptive RuntimeError if the response JSON is malformed
+- Logs the first 80 chars of the prompt and the response time in seconds to stdout
+- Has a retry mechanism: retries up to 3 times with 2-second backoff on failure
+
+--- utils/json_extractor.py ---
+Implement a function extract_json(raw: str) -> list | dict | None that:
+- Strips markdown code fences (```json, ```)
+- Attempts json.loads() on the full stripped string
+- If that fails, uses regex to find the first [...] block (for arrays)
+- If that fails, uses regex to find the first {...} block (for objects)
+- If all attempts fail, prints a warning with the first 200 chars of raw and 
+  returns an empty list
+- Never raises an exception — always returns list, dict, or []
+
+--- tests/test_phase1.py ---
+Write pytest tests that:
+1. test_call_llm_returns_string: calls call_llm with a simple prompt asking for 
+   the word "PONG", asserts the response is a non-empty string
+2. test_call_llm_retry_on_failure: mocks requests.post to fail twice then succeed,
+   asserts call_llm still returns a result and retried exactly 3 times total
+3. test_extract_clean_json: passes a clean JSON array string, asserts correct parse
+4. test_extract_fenced_json: passes ```json\n[...]\n```, asserts correct parse
+5. test_extract_embedded_json: passes prose text with a JSON array buried in it,
+   asserts correct extraction
+6. test_extract_invalid_returns_empty: passes "this is not json at all",
+   asserts return value is []
+7. test_extract_object: passes a JSON object string, asserts dict returned
+
+All tests must be self-contained. Import call_llm and extract_json from their 
+respective modules. Do not mock call_llm in test 1 — hit the real Ollama instance.
+Output both full implementation files and the full test file.
+```
+
+### ✅ Phase 1 Tests
+
+```bash
+# Ollama must be running
+ollama serve &
+
+pytest tests/test_phase1.py -v
+```
+
+**Expected output:**
+```
+test_call_llm_returns_string      PASSED
+test_call_llm_retry_on_failure    PASSED
+test_extract_clean_json           PASSED
+test_extract_fenced_json          PASSED
+test_extract_embedded_json        PASSED
+test_extract_invalid_returns_empty PASSED
+test_extract_object               PASSED
+```
+
+**Visible progress:** Run `python -c "from utils.llm import call_llm; print(call_llm('You are helpful.', 'Say HELLO'))"` and see a real LLM response in your terminal.
+
+---
+
+## Phase 2 — Google Flights Scraper
+
+**Goal:** `scrapers/google_flights.py` fetches a real search results page with Playwright and returns raw text, with no crashes on anti-bot blocks.
+
+### Agent Prompt
+
+```
+You are implementing a Playwright-based flight search scraper for Google Flights.
+Implement scrapers/google_flights.py completely.
+
+The module must contain one async function:
+  fetch_raw(origin: str, dest_iata: str, outbound_date: str, return_date: str) -> str
+
+Where dates are "YYYY-MM-DD" strings.
+
+Requirements:
+- Build the Google Flights URL using this pattern:
+  https://www.google.com/travel/flights/search?q=Flights+from+{origin}+to+{dest_iata}+on+{outbound_date}+returning+{return_date}
+- Launch Chromium in headless mode with these stealth args:
+    --no-sandbox
+    --disable-blink-features=AutomationControlled
+    --disable-dev-shm-usage
+- Use a realistic user agent string (Chrome 120 on Windows)
+- Set viewport to 1280x800
+- Navigate with wait_until="domcontentloaded" and timeout=45000
+- After navigation, wait 4 seconds for JS to render
+- Scroll to bottom of page and wait 2 more seconds
+- Extract ALL text using page.inner_text("body")
+- If the page contains "detected unusual traffic" or "captcha" (case-insensitive), 
+  log a warning and return an empty string rather than crashing
+- If navigation times out, log a warning and return empty string
+- Always close the browser in a finally block
+- The function must be importable and not auto-execute on import
+
+Also implement a second function:
+  build_url(origin, dest_iata, outbound_date, return_date) -> str
+  (pure function, no Playwright, just URL construction — makes it testable)
+
+--- tests/test_phase2.py ---
+Write pytest tests:
+1. test_build_url_format: calls build_url and asserts the result is a valid URL 
+   string containing the origin, dest, and both dates
+2. test_build_url_no_spaces: asserts no raw spaces in the returned URL
+3. test_fetch_raw_returns_string: calls fetch_raw("PHL", "BOS", next Friday's date,
+   next Sunday's date) and asserts a non-empty string is returned. Mark this test 
+   with @pytest.mark.slow so it can be skipped with -m "not slow".
+4. test_fetch_raw_captcha_returns_empty: mock page.inner_text to return 
+   "Please complete the captcha to continue", assert fetch_raw returns ""
+5. test_fetch_raw_timeout_returns_empty: mock page.goto to raise 
+   playwright.async_api.TimeoutError, assert fetch_raw returns ""
+
+Use pytest-asyncio for async tests. Output full implementation and test file.
+```
+
+### ✅ Phase 2 Tests
+
+```bash
+pip install pytest-asyncio
+
+# Fast tests only (no real network)
+pytest tests/test_phase2.py -v -m "not slow"
+
+# Full test including live fetch (takes ~15 seconds)
+pytest tests/test_phase2.py -v
+```
+
+**Expected output:**
+```
+test_build_url_format              PASSED
+test_build_url_no_spaces           PASSED
+test_fetch_raw_returns_string      PASSED  (or SLOW SKIP)
+test_fetch_raw_captcha_returns_empty PASSED
+test_fetch_raw_timeout_returns_empty PASSED
+```
+
+**Visible progress:** Run `python -c "import asyncio; from scrapers.google_flights import fetch_raw; print(asyncio.run(fetch_raw('PHL','BOS','2026-04-18','2026-04-20'))[:500])"` and see raw page text.
+
+---
+
+## Phase 3 — Flight Agent (Scrape + LLM Parse)
+
+**Goal:** `agents/flight_agent.py` combines the scraper + LLM to return structured, filtered flight objects for all destinations and weekend date pairs.
+
+### Agent Prompt
+
+```
+You are implementing the Flight Agent for a weekend trip deal hunter.
+Implement agents/flight_agent.py completely based on these specs:
+
+CLASS: FlightAgent
+  __init__(self, constraints: dict)
+    - stores constraints
+    - initializes self.results = []
+
+  METHOD: get_weekend_pairs(self, num_weekends=6) -> list[tuple[str,str]]
+    - Returns list of (outbound_date, return_date) tuples for the next N weekends
+    - Outbound is Friday OR Saturday (return BOTH for each weekend)
+    - Return is always Sunday of the same weekend
+    - Dates as "YYYY-MM-DD" strings
+    - Never return dates in the past
+
+  METHOD: async scrape_and_parse(self, origin, dest_city, dest_iata, 
+                                  outbound_date, return_date) -> list[dict]
+    - Calls scrapers.google_flights.fetch_raw(origin, dest_iata, outbound, return)
+    - If raw text is empty, returns []
+    - Calls utils.llm.call_llm with a system prompt and user prompt
+    - System prompt: "You are a flight data extraction agent. Extract all visible 
+      flight options from the given search results page text. Return ONLY a valid 
+      JSON array of flight objects. No markdown, no preamble, no explanation."
+    - User prompt: instructs extraction of these fields per flight:
+        price_usd (number), airline (string), outbound_depart (HH:MM), 
+        outbound_arrive (HH:MM), return_depart (HH:MM), return_arrive (HH:MM),
+        layovers (number, 0 if nonstop), duration_mins (number), 
+        is_nonstop (bool)
+    - Include destination city, iata, outbound_date, return_date on every object
+    - Pass raw text trimmed to 3500 chars into the user prompt
+    - Uses utils.json_extractor.extract_json to parse the LLM response
+    - Returns the parsed list (may be empty)
+
+  METHOD: passes_constraints(self, flight: dict) -> bool
+    - price_usd <= constraints["budget"]["max_flight_roundtrip"]
+    - layovers <= constraints["preferences"]["max_layovers"]
+    - outbound timing valid: if Friday, depart >= 17:00; if Saturday, depart <= 09:00
+    - return_arrive <= "22:00"
+    - hours at destination >= constraints["timing"]["min_hours_at_destination"]
+    - If ANY required field is missing from the dict, return False (defensive)
+
+  METHOD: calc_hours_at_destination(self, flight: dict) -> float
+    - Parses outbound_arrive on outbound_date and return_depart on return_date
+    - Returns float hours between arrival and return departure
+    - Returns 0.0 on any parsing error
+
+  METHOD: async run(self, destinations: list[dict]) -> list[dict]
+    - Iterates all destinations × all weekend pairs
+    - Calls scrape_and_parse for each combination
+    - Filters results through passes_constraints
+    - Adds hours_at_destination to each passing flight
+    - Deduplicates on (airline + price + outbound_date + destination)
+    - Returns sorted list by price_usd ascending
+    - Logs progress: "[FlightAgent] Checking {city} {date}..."
+    - Logs final count: "[FlightAgent] {n} valid flights found"
+
+--- tests/test_phase3.py ---
+Write tests:
+1. test_get_weekend_pairs_count: assert 12 pairs returned for num_weekends=6 
+   (6 Fridays + 6 Saturdays)
+2. test_get_weekend_pairs_no_past_dates: assert all outbound dates >= today
+3. test_get_weekend_pairs_sunday_returns: assert all return dates are Sundays
+4. test_passes_constraints_valid: construct a valid flight dict, assert True
+5. test_passes_constraints_over_budget: set price above cap, assert False
+6. test_passes_constraints_bad_timing_friday: set Friday depart to 14:00, assert False
+7. test_passes_constraints_bad_timing_saturday: set Saturday depart to 11:00, assert False
+8. test_passes_constraints_late_return: set return_arrive to 23:30, assert False
+9. test_passes_constraints_missing_field: pass dict missing price_usd, assert False
+10. test_calc_hours_normal: Friday arrive 20:00, Sunday depart 18:00, assert ~46.0
+11. test_calc_hours_saturday_arrive: Saturday arrive 09:30, Sunday depart 19:00, assert ~33.5
+12. test_scrape_and_parse_empty_raw: mock fetch_raw to return "", assert returns []
+13. test_scrape_and_parse_llm_called: mock fetch_raw to return "some text", 
+    mock call_llm to return '[{"price_usd":150,"airline":"AA","outbound_depart":"18:00",
+    "outbound_arrive":"19:30","return_depart":"18:00","return_arrive":"19:30",
+    "layovers":0,"duration_mins":90,"is_nonstop":true}]',
+    assert returns list of length 1 with price_usd=150
+14. test_deduplication: mock scrape_and_parse to return the same flight twice 
+    across two calls, assert run() returns only 1 result
+
+Output full implementation and test file.
+```
+
+### ✅ Phase 3 Tests
+
+```bash
+pytest tests/test_phase3.py -v
+```
+
+**Expected output:**
+```
+test_get_weekend_pairs_count          PASSED
+test_get_weekend_pairs_no_past_dates  PASSED
+test_get_weekend_pairs_sunday_returns PASSED
+test_passes_constraints_valid         PASSED
+test_passes_constraints_over_budget   PASSED
+test_passes_constraints_bad_timing_friday    PASSED
+test_passes_constraints_bad_timing_saturday  PASSED
+test_passes_constraints_late_return   PASSED
+test_passes_constraints_missing_field PASSED
+test_calc_hours_normal                PASSED
+test_calc_hours_saturday_arrive       PASSED
+test_scrape_and_parse_empty_raw       PASSED
+test_scrape_and_parse_llm_called      PASSED
+test_deduplication                    PASSED
+```
+
+**Visible progress:** Run `python -c "import asyncio, json; from agents.flight_agent import FlightAgent; a = FlightAgent(json.load(open('config/constraints.json'))); print(a.get_weekend_pairs(2))"` and see 4 date pairs printed.
+
+---
+
+## Phase 4 — Hotel Agent (Scrape + LLM Parse)
+
+**Goal:** `agents/hotel_agent.py` + `scrapers/booking.py` scrape Booking.com and return the best available stays for a given destination and date pair.
+
+### Agent Prompt
+
+```
+You are implementing the Hotel Agent for a weekend trip deal hunter.
+Implement scrapers/booking.py and agents/hotel_agent.py completely.
+
+--- scrapers/booking.py ---
+Implement async fetch_raw(city: str, checkin: str, checkout: str) -> str
+  - URL: https://www.booking.com/searchresults.html?ss={city}&checkin={checkin}
+          &checkout={checkout}&group_adults=1&no_rooms=1&order=price
+  - Same Playwright stealth setup as google_flights.py (same user agent, viewport, 
+    stealth args, scroll, 4s wait)
+  - Detect "Access Denied", "are you a robot", "captcha" → log warning, return ""
+  - Timeout handling → log warning, return ""
+  - Always close browser in finally block
+  - Also implement build_url(city, checkin, checkout) -> str as a pure function
+
+--- agents/hotel_agent.py ---
+CLASS: HotelAgent
+  __init__(self, constraints: dict)
+
+  METHOD: async scrape_and_parse(self, city, checkin, checkout, source) -> list[dict]
+    - Calls scrapers.booking.fetch_raw(city, checkin, checkout)
+    - LLM system prompt: "You are a hotel listing extraction agent. Extract all 
+      visible accommodation listings from the page text. Return ONLY a valid JSON 
+      array. No markdown, no preamble."
+    - LLM user prompt: extract these fields:
+        name (string), price_per_night (number, USD), total_price (number, USD),
+        rating (number, normalize to 5.0 scale), review_count (number),
+        type ("hotel" | "hostel" | "apartment" | "other"),
+        neighborhood (string or null), source (string passed in)
+    - Uses extract_json to parse
+    - Normalizes rating: if > 5 assume it's on a 10-pt scale, divide by 2
+    - Filters out listings where total_price <= 0 or rating < constraints hotel_min_rating
+    - Returns filtered list
+
+  METHOD: async run(self, flight_deals: list[dict]) -> list[dict]
+    - For each flight deal, call scrape_and_parse for that destination + dates
+    - If no valid stays found, SKIP this deal (log "[HotelAgent] No stays for {city} {date}, skipping")
+    - Sort stays by (rating desc, total_price asc) — best value first
+    - Add to deal dict:
+        best_stay: the top result
+        all_stays: top 5 results
+        hotel_search_performed: True
+    - Add total_trip_cost = flight price_usd + best_stay total_price
+    - Return only deals that have a best_stay
+
+--- tests/test_phase4.py ---
+1. test_build_url_contains_city: assert city appears in URL
+2. test_build_url_contains_dates: assert checkin and checkout in URL
+3. test_scrape_and_parse_empty_raw: mock fetch_raw → "", assert []
+4. test_scrape_and_parse_filters_low_rating: mock LLM to return hotel with rating 2.0,
+   assert filtered out (constraints min is 3.5)
+5. test_scrape_and_parse_normalizes_10pt_rating: mock LLM to return rating 8.4,
+   assert stored as 4.2
+6. test_scrape_and_parse_filters_zero_price: mock LLM with total_price=0, assert filtered
+7. test_run_skips_deal_with_no_stays: mock scrape_and_parse → [], 
+   assert that deal is NOT in the output
+8. test_run_adds_best_stay: mock scrape_and_parse → one valid hotel,
+   assert deal["best_stay"] is set
+9. test_run_adds_total_trip_cost: flight price 200, hotel total 250,
+   assert deal["total_trip_cost"] == 450
+10. test_run_sorts_by_rating_then_price: provide 3 stays with varying ratings/prices,
+    assert best_stay is the highest-rated one
+
+Output full implementation and full test file.
+```
+
+### ✅ Phase 4 Tests
+
+```bash
+pytest tests/test_phase4.py -v
+```
+
+**Expected output:**
+```
+test_build_url_contains_city          PASSED
+test_build_url_contains_dates         PASSED
+test_scrape_and_parse_empty_raw       PASSED
+test_scrape_and_parse_filters_low_rating  PASSED
+test_scrape_and_parse_normalizes_10pt_rating PASSED
+test_scrape_and_parse_filters_zero_price PASSED
+test_run_skips_deal_with_no_stays     PASSED
+test_run_adds_best_stay               PASSED
+test_run_adds_total_trip_cost         PASSED
+test_run_sorts_by_rating_then_price   PASSED
+```
+
+**Visible progress:** Run `python -c "import asyncio; from agents.hotel_agent import HotelAgent; import json; a = HotelAgent(json.load(open('config/constraints.json'))); print('HotelAgent imported and initialized OK')"`.
+
+---
+
+## Phase 5 — Cost Agent & Deal Scorer
+
+**Goal:** Every deal gets a realistic total budget estimate and a 0–100 score that determines which deals surface.
+
+### Agent Prompt
+
+```
+You are implementing the Cost Agent and Deal Scorer for a weekend deal hunter.
+Implement agents/cost_agent.py and orchestrator/deal_scorer.py completely.
+
+--- agents/cost_agent.py ---
+CLASS: CostAgent
+  __init__(self)  # no constraints needed
+
+  METHOD: estimate_transit(self, city: str) -> dict
+    - Calls call_llm with:
+      System: "You are a travel cost estimator. Always respond with ONLY valid JSON.
+               No markdown, no explanation."
+      User: "For a weekend trip to {city} from a major US airport, estimate costs 
+             in USD as a JSON object with these exact keys:
+             airport_transit_one_way (cheapest public transit option, number),
+             rideshare_one_way (Uber/Lyft estimate, number),
+             daily_food_budget_low (number), daily_food_budget_mid (number),
+             avg_activity_cost (one typical paid activity, number),
+             public_transit_day_pass (number or null if city has no good transit)"
+    - Uses extract_json to parse response
+    - If parsing fails, returns safe hardcoded defaults:
+        {"airport_transit_one_way": 15, "rideshare_one_way": 35,
+         "daily_food_budget_low": 40, "daily_food_budget_mid": 65,
+         "avg_activity_cost": 25, "public_transit_day_pass": 10}
+    - Clamps all numeric values to reasonable ranges:
+        transit: 2–100, rideshare: 10–120, food_low: 20–100, 
+        food_mid: 40–150, activity: 0–200
+
+  METHOD: compute_full_budget(self, deal: dict) -> dict
+    - Calls estimate_transit for deal["destination"]
+    - Computes estimated_extras:
+        (airport_transit_one_way * 2)          ← to/from airport
+        + (daily_food_budget_mid * 2)          ← 2 days
+        + avg_activity_cost                    ← 1 activity
+    - Adds to deal:
+        transit_estimates: the full transit dict
+        estimated_extras: rounded to 2 decimal places
+        estimated_total: total_trip_cost + estimated_extras, rounded to 2dp
+    - Returns the mutated deal
+
+--- orchestrator/deal_scorer.py ---
+Implement score_deal(deal: dict, constraints: dict) -> float
+  Returns a score from 0.0 to 100.0 using this weighted formula:
+
+  PRICE SCORE (40 points):
+    budget_cap = max_flight_roundtrip + (max_hotel_per_night * 2)
+    price_ratio = total_trip_cost / budget_cap
+    price_score = max(0, 40 * (1 - price_ratio))
+
+  NONSTOP SCORE (20 points):
+    0 layovers → 20 pts
+    1 layover  → 10 pts
+    2+ layovers → 0 pts
+
+  HOTEL QUALITY SCORE (20 points):
+    rating = best_stay.rating (default 3.0 if missing)
+    hotel_score = (rating / 5.0) * 20
+
+  TIME AT DESTINATION SCORE (10 points):
+    hours = hours_at_destination (default 24)
+    time_score = min(10, (hours / 48) * 10)
+
+  RETURN BUFFER SCORE (10 points):
+    Parse return_arrive as float hours (e.g. "19:30" → 19.5)
+    buffer = max(0, 22.0 - arrive_hour)
+    buffer_score = min(10, buffer * 2.5)
+
+  Final: sum all five, round to 1 decimal place
+  If any required key is missing, return 0.0 rather than crashing
+
+--- tests/test_phase5.py ---
+1. test_estimate_transit_returns_dict: mock call_llm to return valid JSON, 
+   assert result is a dict with all 6 expected keys
+2. test_estimate_transit_uses_defaults_on_bad_json: mock call_llm to return 
+   "I cannot estimate that", assert result equals the hardcoded defaults
+3. test_estimate_transit_clamps_high_values: mock call_llm to return 
+   {"airport_transit_one_way": 9999, ...}, assert clamped to 100
+4. test_compute_full_budget_adds_fields: mock estimate_transit, call compute_full_budget,
+   assert deal has "transit_estimates", "estimated_extras", "estimated_total"
+5. test_compute_full_budget_math: flight=200, hotel total=250, 
+   transit=(10 airport x2, 60 food x2, 25 activity), 
+   assert estimated_extras=165, estimated_total=615
+6. test_score_perfect_deal: construct deal where everything is optimal 
+   (cheap, nonstop, 5-star hotel, 48hrs there, lands at 18:00),
+   assert score >= 90
+7. test_score_bad_deal: expensive, 2 layovers, low rating hotel, 
+   lands at 21:45, assert score <= 30
+8. test_score_price_component: isolate price score by fixing all others,
+   assert cheaper deal scores higher
+9. test_score_nonstop_beats_one_stop: two identical deals, one nonstop,
+   one with 1 layover, assert nonstop scores 10 points higher
+10. test_score_missing_keys_returns_zero: pass empty dict, assert 0.0
+
+Output full implementations and test file.
+```
+
+### ✅ Phase 5 Tests
+
+```bash
+pytest tests/test_phase5.py -v
+```
+
+**Expected output:**
+```
+test_estimate_transit_returns_dict         PASSED
+test_estimate_transit_uses_defaults        PASSED
+test_estimate_transit_clamps_high_values   PASSED
+test_compute_full_budget_adds_fields       PASSED
+test_compute_full_budget_math              PASSED
+test_score_perfect_deal                    PASSED
+test_score_bad_deal                        PASSED
+test_score_price_component                 PASSED
+test_score_nonstop_beats_one_stop          PASSED
+test_score_missing_keys_returns_zero       PASSED
+```
+
+**Visible progress:** Run `python -c "from orchestrator.deal_scorer import score_deal; import json; c=json.load(open('config/constraints.json')); print(score_deal({'total_trip_cost':300,'layovers':0,'best_stay':{'rating':4.5},'hours_at_destination':36,'return_arrive':'19:00'}, c))"` and see a score printed.
+
+---
+
+## Phase 6 — Recommendation Agent & State Manager
+
+**Goal:** Top deals get AI-generated weekend itineraries. Seen deals are stored in SQLite so you never get duplicate notifications.
+
+### Agent Prompt
+
+```
+You are implementing the Recommendation Agent and State Manager.
+Implement agents/recommendation_agent.py and orchestrator/state_manager.py.
+
+--- agents/recommendation_agent.py ---
+CLASS: RecommendationAgent
+  __init__(self)
+
+  METHOD: generate(self, deal: dict) -> dict
+    - Extracts: city, arrive_time (outbound_arrive), depart_time (return_depart),
+      hours_at_destination, outbound_date (day of week), return_date
+    - Calls call_llm with:
+      System: "You are a weekend travel guide. Be specific, practical, and concise.
+               Focus on what is actually achievable in the time given."
+      User prompt (build dynamically):
+        "I'm flying into {city} and arriving around {arrive_time} on {outbound_day}.
+         I need to depart at {depart_time} on Sunday. I have ~{hours:.0f} hours total.
+         
+         Give me exactly:
+         1. TOP 3 ACTIVITIES (name, ~time needed, ~cost in USD)
+         2. BEST NEIGHBORHOOD TO STAY (1 sentence why)
+         3. 2 RESTAURANTS (one budget under $20, one mid-range $30-60, with cuisine type)
+         4. ONE PRO TIP specific to this city for a short trip
+         
+         Be realistic — if I only have 24 hours, don't suggest 6 things."
+    - Adds deal["recommendations"] = LLM response string
+    - Adds deal["recommendations_city"] = city
+    - Returns the mutated deal
+
+  METHOD: generate_batch(self, deals: list[dict]) -> list[dict]
+    - Calls generate() for each deal
+    - Catches any exception per deal (logs warning, sets recommendations to 
+      "Could not generate recommendations.")
+    - Returns all deals (even those that failed)
+
+--- orchestrator/state_manager.py ---
+DB_PATH = "data/deals.db"
+
+FUNCTIONS (module-level, not a class):
+
+  init_db()
+    - Creates data/ directory if it doesn't exist
+    - Creates table "deals" if not exists:
+        id TEXT PRIMARY KEY,
+        destination TEXT NOT NULL,
+        outbound_date TEXT NOT NULL,
+        airline TEXT,
+        flight_price REAL,
+        hotel_price REAL,
+        total_estimated REAL,
+        score REAL,
+        seen_at TEXT,
+        full_json TEXT
+    - Creates table "runs" if not exists:
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT,
+        finished_at TEXT,
+        deals_found INTEGER,
+        deals_notified INTEGER
+
+  deal_hash(deal: dict) -> str
+    - MD5 of "{destination}-{outbound_date}-{airline}-{price_usd}"
+    - Returns hex string
+
+  is_duplicate(deal: dict) -> bool
+    - Calls init_db() to ensure table exists
+    - Queries deals table for the hash
+    - Returns True if found
+
+  save_deal(deal: dict)
+    - Calls init_db()
+    - INSERT OR IGNORE into deals with all fields
+    - full_json stores json.dumps(deal)
+    - seen_at = datetime.now().isoformat()
+
+  log_run(started_at: str, finished_at: str, found: int, notified: int)
+    - Inserts into runs table
+
+  get_recent_deals(limit=20) -> list[dict]
+    - Returns list of dicts from deals table, ordered by seen_at DESC
+    - Parses full_json back into dict for each row
+
+--- tests/test_phase6.py ---
+1. test_generate_adds_recommendations: mock call_llm to return "RECS TEXT",
+   assert deal["recommendations"] == "RECS TEXT"
+2. test_generate_batch_handles_exception: mock call_llm to raise RuntimeError 
+   on second call, assert batch still returns all deals, second has fallback text
+3. test_deal_hash_deterministic: same deal hashed twice → same result
+4. test_deal_hash_different_for_different_deals: two different deals → different hashes
+5. test_is_duplicate_false_for_new: use temp DB path, assert new deal not duplicate
+6. test_is_duplicate_true_after_save: save a deal, assert is_duplicate returns True
+7. test_save_deal_persists: save deal, call get_recent_deals, assert deal in results
+8. test_get_recent_deals_order: save 3 deals with different seen_at, 
+   assert returned in descending order
+9. test_log_run_persists: call log_run, query DB directly, assert row exists
+10. test_init_db_idempotent: call init_db() three times, assert no error
+
+Use a temporary DB path via monkeypatch for all DB tests so they don't 
+pollute data/deals.db.
+Output full implementations and test file.
+```
+
+### ✅ Phase 6 Tests
+
+```bash
+pytest tests/test_phase6.py -v
+```
+
+**Expected output:**
+```
+test_generate_adds_recommendations      PASSED
+test_generate_batch_handles_exception   PASSED
+test_deal_hash_deterministic            PASSED
+test_deal_hash_different_deals          PASSED
+test_is_duplicate_false_for_new         PASSED
+test_is_duplicate_true_after_save       PASSED
+test_save_deal_persists                 PASSED
+test_get_recent_deals_order             PASSED
+test_log_run_persists                   PASSED
+test_init_db_idempotent                 PASSED
+```
+
+**Visible progress:** Run `python -c "from orchestrator.state_manager import init_db; init_db(); print('DB initialized')"` and see `data/deals.db` created on disk.
+
+---
+
+## Phase 7 — Local Dashboard
+
+**Goal:** `notifications/local_dashboard.py` generates a polished, self-refreshing HTML file from deal data. You can open it in a browser and see all results.
+
+### Agent Prompt
+
+```
+You are implementing the local HTML dashboard for a weekend travel deal hunter.
+Implement notifications/local_dashboard.py completely.
+
+FUNCTION: write_dashboard(deals: list[dict], output_path="data/dashboard.html")
+  Generates a complete self-contained HTML file with these features:
+
+  HEADER:
+  - Title "✈️ Weekend Deal Hunter"
+  - Subtitle showing origin city (PHL) and scan timestamp
+  - Count badge: "X deals found this run"
+  - Meta refresh tag: refreshes every 10 minutes
+  - "No deals found" empty state if deals list is empty
+
+  DEAL CARDS (one per deal, sorted by score desc):
+  Each card must show:
+  - Destination name as heading
+  - Score badge (color-coded: green ≥70, yellow ≥55, red <55)
+  - Date range (outbound_date → return_date)
+  - Flight line: price, airline, stops, depart/arrive times
+  - Hotel line: name, total price, rating as stars (★)
+  - Estimated total cost (prominent)
+  - Hours at destination
+  - Outbound timing label ("Friday Evening" or "Early Saturday")
+  - A collapsible <details> section for recommendations text
+  - A collapsible <details> section showing all_stays (up to 5) as a mini table
+
+  DESIGN REQUIREMENTS:
+  - Dark theme (#0d0d0d background, #1a1a1a cards)
+  - Monospace font for data fields, sans-serif for headings
+  - CSS only — no external dependencies, no CDN links (fully offline)
+  - Score badge uses inline style for color
+  - Cards have subtle left border colored by score tier
+  - Mobile-friendly: single column on narrow screens via CSS
+  - Footer: "Generated by Weekend Deal Hunter · data/deals.db"
+
+FUNCTION: render_no_deals_page(output_path="data/dashboard.html")
+  Writes a minimal HTML page saying no deals were found this run,
+  with the timestamp and a note that the pipeline will run again in 6 hours.
+
+--- tests/test_phase7.py ---
+1. test_write_dashboard_creates_file: call write_dashboard([]), assert file exists
+2. test_write_dashboard_empty_state: with [], assert HTML contains "No deals found"
+3. test_write_dashboard_shows_destination: pass 1 deal with destination="Boston",
+   assert "Boston" appears in HTML
+4. test_write_dashboard_shows_score: pass deal with score=72.5, 
+   assert "72.5" appears in HTML
+5. test_write_dashboard_shows_price: pass deal with estimated_total=487.50,
+   assert "487" appears in HTML
+6. test_write_dashboard_multiple_deals: pass 3 deals, assert all 3 destinations appear
+7. test_write_dashboard_score_order: pass deals with scores [45, 80, 62],
+   assert 80 appears before 62 before 45 in file content
+8. test_write_dashboard_valid_html: assert file starts with "<!DOCTYPE html>"
+9. test_write_dashboard_no_external_deps: assert "cdn" not in HTML (fully offline)
+10. test_render_no_deals_page_creates_file: assert file created and contains timestamp
+
+Output full implementation and test file.
+```
+
+### ✅ Phase 7 Tests
+
+```bash
+pytest tests/test_phase7.py -v
+```
+
+**Expected output:**
+```
+test_write_dashboard_creates_file     PASSED
+test_write_dashboard_empty_state      PASSED
+test_write_dashboard_shows_destination PASSED
+test_write_dashboard_shows_score      PASSED
+test_write_dashboard_shows_price      PASSED
+test_write_dashboard_multiple_deals   PASSED
+test_write_dashboard_score_order      PASSED
+test_write_dashboard_valid_html       PASSED
+test_write_dashboard_no_external_deps PASSED
+test_render_no_deals_page_creates_file PASSED
+```
+
+**Visible progress:** Run `python -c "from notifications.local_dashboard import write_dashboard; write_dashboard([])"` then open `data/dashboard.html` in your browser.
+
+---
+
+## Phase 8 — Master Pipeline & Scheduler
+
+**Goal:** All agents are wired together. One command runs the full end-to-end pipeline. The scheduler runs it automatically every 6 hours and on Tuesday mornings.
+
+### Agent Prompt
+
+```
+You are implementing the master pipeline and scheduler for a weekend deal hunter.
+Implement orchestrator/pipeline.py and scheduler.py completely.
+
+--- orchestrator/pipeline.py ---
+FUNCTION: run_pipeline(aggressive=False) -> dict
+  Returns a summary dict: {started_at, finished_at, deals_found, deals_notified}
+
+  STEPS (in order, each step logs its start):
+  1. Load config/destinations.json and config/constraints.json
+  2. Init state manager DB
+  3. Record started_at = datetime.now().isoformat()
+  4. Instantiate FlightAgent, HotelAgent, CostAgent, RecommendationAgent
+  5. Run FlightAgent.run(destinations) — await with asyncio.run()
+     If result is empty, log "[Pipeline] No valid flights found. Aborting." 
+     write no-deals dashboard and return early.
+  6. Run HotelAgent.run(flight_deals) — await with asyncio.run()
+     If result is empty, same early abort.
+  7. For each enriched deal, call CostAgent.compute_full_budget(deal)
+  8. Score each deal with score_deal(deal, constraints)
+  9. Filter: keep only deals with score >= SCORE_THRESHOLD (default 55, 
+     override with env var DEAL_SCORE_THRESHOLD)
+  10. Sort by score descending
+  11. Take top 10 deals
+  12. Call RecommendationAgent.generate_batch(top_deals)
+  13. Separate into new deals (not duplicate) and seen deals
+  14. For new deals only: save_deal(), then write_dashboard()
+  15. Log run summary: X flights → Y with hotels → Z scored → N new
+  16. Record finished_at, call log_run()
+  17. Return summary dict
+
+  ERROR HANDLING:
+  - Wrap the entire pipeline in try/except
+  - On any unhandled exception: log full traceback, write no-deals dashboard,
+    return summary with deals_found=0, deals_notified=0
+  - Individual agent failures (already handled in each agent) do not abort pipeline
+
+--- scheduler.py ---
+  - Uses APScheduler BlockingScheduler
+  - Job 1: run_pipeline() every 6 hours
+  - Job 2: run_pipeline(aggressive=True) every Tuesday at 09:00 local time
+  - On startup: log all scheduled jobs with their next run times
+  - Catches KeyboardInterrupt gracefully: logs "Scheduler stopped."
+  - Runs run_pipeline() ONCE immediately on startup before the scheduler starts
+    (so you see results right away on first launch)
+
+--- tests/test_phase8.py ---
+1. test_pipeline_returns_summary_dict: mock all agents to return minimal valid data,
+   assert run_pipeline() returns dict with all 4 expected keys
+2. test_pipeline_aborts_on_no_flights: mock FlightAgent.run to return [],
+   assert pipeline returns early with deals_found=0
+3. test_pipeline_aborts_on_no_hotels: mock HotelAgent.run to return [],
+   assert pipeline returns early with deals_found=0
+4. test_pipeline_filters_by_score_threshold: provide 3 deals scored [80, 60, 40],
+   set threshold to 55, assert only 2 deals make it to recommendations
+5. test_pipeline_deduplicates: mock is_duplicate to return True for all deals,
+   assert deals_notified=0
+6. test_pipeline_saves_new_deals: mock is_duplicate to return False,
+   mock save_deal, assert save_deal called once per new deal
+7. test_pipeline_calls_dashboard: mock write_dashboard, assert it is called
+8. test_pipeline_handles_exception: mock FlightAgent.run to raise RuntimeError,
+   assert run_pipeline() still returns a summary dict (does not raise)
+9. test_pipeline_logs_run: mock log_run, assert called with correct args after run
+10. test_score_threshold_env_override: set env var DEAL_SCORE_THRESHOLD=75,
+    reload settings, assert threshold is 75 not 55
+
+Output full implementations and test file.
+```
+
+### ✅ Phase 8 Tests
+
+```bash
+pytest tests/test_phase8.py -v
+```
+
+**Expected output:**
+```
+test_pipeline_returns_summary_dict     PASSED
+test_pipeline_aborts_on_no_flights     PASSED
+test_pipeline_aborts_on_no_hotels      PASSED
+test_pipeline_filters_by_score_threshold PASSED
+test_pipeline_deduplicates             PASSED
+test_pipeline_saves_new_deals          PASSED
+test_pipeline_calls_dashboard          PASSED
+test_pipeline_handles_exception        PASSED
+test_pipeline_logs_run                 PASSED
+test_score_threshold_env_override      PASSED
+```
+
+**Visible progress:** With Ollama running, execute `python -c "from orchestrator.pipeline import run_pipeline; print(run_pipeline())"` and watch all agents log their progress. Open `data/dashboard.html` when complete.
+
+---
+
+## Phase 9 — Full Integration & End-to-End Test
+
+**Goal:** The entire system runs from `python scheduler.py`, produces real results, and the dashboard shows them. All phases are regression-tested together.
+
+### Agent Prompt
+
+```
+You are writing the final integration test suite and a run script for the 
+Weekend Deal Hunter. Implement tests/test_integration.py and run_once.py.
+
+--- run_once.py ---
+A standalone script that:
+1. Checks Ollama is running at localhost:11434 — if not, prints instructions 
+   and exits with code 1
+2. Checks that config files exist — if not, prints which are missing and exits
+3. Calls run_pipeline() 
+4. Prints the summary dict
+5. Prints the path to the dashboard HTML file
+6. Opens the dashboard in the default browser using webbrowser.open()
+
+--- tests/test_integration.py ---
+These are INTEGRATION tests that use real Ollama but MOCK all Playwright scraping.
+They test the full pipeline wired together, end-to-end.
+
+FIXTURE: mock_flight_data
+  Returns a list of 3 realistic flight dicts covering 2 different destinations
+  with varied prices (120, 185, 240), airlines, times, and layover counts.
+  All pass constraints.
+
+FIXTURE: mock_hotel_data  
+  Returns a list of 2 hotel dicts per destination — valid ratings, prices, names.
+
+1. test_full_pipeline_end_to_end:
+   - Mock fetch_raw in google_flights.py to return a realistic multi-flight text blob
+   - Mock fetch_raw in booking.py to return a realistic multi-hotel text blob
+   - Run run_pipeline() 
+   - Assert summary["deals_found"] > 0
+   - Assert data/dashboard.html exists and contains at least one destination name
+   - Assert data/deals.db exists and has rows
+
+2. test_llm_extracts_flights_from_real_text:
+   - Create a FlightAgent with real constraints
+   - Prepare a realistic fake page text that looks like Google Flights output
+     (e.g., "$189 · American Airlines · Nonstop · 1h 25m · 6:00 PM → 7:25 PM")
+   - Call scrape_and_parse() with that text injected (mock only fetch_raw)
+   - Assert at least 1 flight returned with price_usd > 0
+   - This tests that real Ollama can extract structured data from realistic text
+
+3. test_llm_extracts_hotels_from_real_text:
+   - Same approach for HotelAgent
+   - Prepare fake Booking.com-style text:
+     ("The Liberty Hotel · 4.5/5 · $189/night · $378 total · Back Bay")
+   - Assert at least 1 hotel returned with valid rating and price
+
+4. test_scorer_ranks_correctly:
+   - Given 5 mock deals with known attributes, assert they are ranked by score
+     in the expected order after full pipeline scoring
+
+5. test_dashboard_renders_all_deals:
+   - Run write_dashboard() with 5 fake deals
+   - Assert each destination appears in the output HTML
+
+6. test_no_duplicate_notification:
+   - Run pipeline once (mocked scraping)
+   - Run pipeline again immediately
+   - Assert second run's deals_notified == 0 (all duplicates)
+
+7. test_pipeline_resilient_to_partial_scrape_failure:
+   - Mock google_flights.fetch_raw to return "" for 2 of 3 destinations
+     but a real text blob for 1
+   - Assert pipeline still finds deals for the 1 working destination
+
+Mark tests 2 and 3 as @pytest.mark.llm since they call real Ollama.
+All others should mock Ollama too (using mock_call_llm fixture that returns 
+pre-baked realistic JSON strings).
+
+Output run_once.py and tests/test_integration.py in full.
+```
+
+### ✅ Phase 9 Tests — Final Gate
+
+```bash
+# Fast integration tests (mocked LLM)
+pytest tests/test_integration.py -v -m "not llm"
+
+# Full integration including real Ollama
+pytest tests/test_integration.py -v
+
+# Full regression — every phase at once
+pytest tests/ -v --tb=short
+```
+
+**Expected output:**
+```
+tests/test_phase0.py  ....    4 passed
+tests/test_phase1.py  .......  7 passed
+tests/test_phase2.py  .....    5 passed
+tests/test_phase3.py  ..............  14 passed
+tests/test_phase4.py  ..........  10 passed
+tests/test_phase5.py  ..........  10 passed
+tests/test_phase6.py  ..........  10 passed
+tests/test_phase7.py  ..........  10 passed
+tests/test_phase8.py  ..........  10 passed
+tests/test_integration.py .......  7 passed
+
+97 passed in ~45s
+```
+
+**Final visible progress:**
+```bash
+# The real launch command
+python run_once.py
+```
+```
+[run_once] Checking Ollama... ✓ Running
+[run_once] Checking configs... ✓ Found
+[Pipeline] Starting run at 2026-04-12 14:00:00
+[FlightAgent] Checking Boston 2026-04-17...
+[FlightAgent] Checking Boston 2026-04-18...
+...
+[FlightAgent] 8 valid flights found
+[HotelAgent] 6 deals have stays
+[Pipeline] 4 deals scored above threshold
+[Pipeline] 4 new deals → dashboard updated
+[run_once] Dashboard: data/dashboard.html
+[run_once] Opening in browser...
+```
+
+---
+
+## Summary — Phase Gate Checklist
+
+| Phase | What's Built | Tests Pass | Visible Proof |
+|---|---|---|---|
+| 0 | Scaffold + configs | 4 | Directory tree exists |
+| 1 | LLM + JSON utils | 7 | Real Ollama response in terminal |
+| 2 | Google Flights scraper | 5 | Raw page text printed |
+| 3 | Flight agent + filters | 14 | Weekend date pairs printed |
+| 4 | Hotel agent | 10 | Agent initializes, hotel URL builds |
+| 5 | Cost agent + scorer | 10 | Score printed for a test deal |
+| 6 | Recommendations + SQLite | 10 | `deals.db` created on disk |
+| 7 | HTML dashboard | 10 | Dashboard opens in browser |
+| 8 | Pipeline + scheduler | 10 | Full pipeline logs in terminal |
+| 9 | Integration tests | 7 | 97 total tests green, browser opens |
+
+Each phase prompt is designed to be pasted directly into Claude (or any coding agent like Cursor/Aider) as a standalone task. You never need to move to the next phase until the test gate is fully green.
