@@ -5,9 +5,16 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+import orchestrator.quota_manager as qm
 from apis.amadeus import AmadeusClient
 from apis.kiwi import KiwiClient
 from apis.serpapi_flights import SerpApiClient
+
+
+@pytest.fixture(autouse=True)
+def _temp_db(monkeypatch, tmp_path):
+    db_path = str(tmp_path / "test_deals.db")
+    monkeypatch.setattr(qm, "DB_PATH", db_path)
 
 
 # ── Amadeus ──────────────────────────────────────────────────────────────────

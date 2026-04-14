@@ -125,7 +125,7 @@ class FlightAgent:
             "price_usd", "layovers", "outbound_depart", "outbound_date",
             "return_arrive",
         ]
-        if any(k not in flight or not flight[k] for k in required):
+        if any(k not in flight or flight[k] is None or flight[k] == "" for k in required):
             return False
 
         c = self.constraints
