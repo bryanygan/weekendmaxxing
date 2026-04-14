@@ -24,5 +24,12 @@
   },
   "min_hours_at_dest": 24,
   "max_layovers": 1,
-  "hotel_min_rating": 3.5
+  "hotel_min_rating": 3.5,
+  "soft_floors": {
+    "min_friday_depart": "12:00",
+    "max_saturday_depart": "12:00",
+    "max_sunday_arrive": "23:59",
+    "max_total_usd": 800,
+    "min_hours_at_dest": 12
+  }
 }

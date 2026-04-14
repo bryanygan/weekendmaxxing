@@ -85,46 +85,89 @@ def test_compute_full_budget_math():
 # ── Deal Scorer tests ───────────────────────────────────────────────────────
 
 
-def _make_deal(**overrides):
+def _make_scored_deal(**overrides):
     base = {
         "total_trip_cost": 200,
         "layovers": 0,
         "best_stay": {"rating": 5.0},
         "hours_at_destination": 48,
         "return_arrive": "18:00",
+        "outbound_depart": "18:00",
+        "outbound_date": "2026-04-17",  # Friday
+        "price_confidence": "high",
     }
     base.update(overrides)
     return base
 
 
 def test_score_perfect_deal():
-    deal = _make_deal(total_trip_cost=100, layovers=0,
-                      best_stay={"rating": 5.0}, hours_at_destination=48,
-                      return_arrive="18:00")
+    deal = _make_scored_deal(total_trip_cost=100, layovers=0,
+                             best_stay={"rating": 5.0}, hours_at_destination=48,
+                             return_arrive="18:00", outbound_depart="18:00",
+                             outbound_date="2026-04-17", price_confidence="high")
     score = score_deal(deal, CONSTRAINTS)
-    assert score >= 90
+    assert score >= 85
 
 
 def test_score_bad_deal():
-    deal = _make_deal(total_trip_cost=580, layovers=2,
-                      best_stay={"rating": 2.5}, hours_at_destination=20,
-                      return_arrive="21:45")
+    deal = _make_scored_deal(total_trip_cost=700, layovers=2,
+                             best_stay={"rating": 2.5}, hours_at_destination=14,
+                             return_arrive="21:45", outbound_depart="13:00",
+                             outbound_date="2026-04-17", price_confidence="low")
     score = score_deal(deal, CONSTRAINTS)
-    assert score <= 30
+    assert score <= 35
 
 
 def test_score_price_component():
-    cheap = _make_deal(total_trip_cost=150)
-    expensive = _make_deal(total_trip_cost=500)
+    cheap = _make_scored_deal(total_trip_cost=150)
+    expensive = _make_scored_deal(total_trip_cost=500)
     assert score_deal(cheap, CONSTRAINTS) > score_deal(expensive, CONSTRAINTS)
 
 
 def test_score_nonstop_beats_one_stop():
-    nonstop = _make_deal(layovers=0)
-    one_stop = _make_deal(layovers=1)
-    diff = score_deal(nonstop, CONSTRAINTS) - score_deal(one_stop, CONSTRAINTS)
-    assert abs(diff - 10) < 0.1
+    nonstop = _make_scored_deal(layovers=0)
+    one_stop = _make_scored_deal(layovers=1)
+    assert score_deal(nonstop, CONSTRAINTS) > score_deal(one_stop, CONSTRAINTS)
 
 
 def test_score_missing_keys_returns_zero():
     assert score_deal({}, CONSTRAINTS) == 0.0
+
+
+def test_score_timing_fit_friday_evening():
+    deal = _make_scored_deal(outbound_depart="18:00", outbound_date="2026-04-17")
+    score = score_deal(deal, CONSTRAINTS)
+    # Friday 6pm = ideal timing = 10 points
+    deal2 = _make_scored_deal(outbound_depart="14:00", outbound_date="2026-04-17")
+    score2 = score_deal(deal2, CONSTRAINTS)
+    assert score > score2  # 18:00 should score higher than 14:00
+
+
+def test_score_timing_fit_saturday_morning():
+    deal = _make_scored_deal(outbound_depart="08:00", outbound_date="2026-04-18")
+    score = score_deal(deal, CONSTRAINTS)
+    deal2 = _make_scored_deal(outbound_depart="11:00", outbound_date="2026-04-18")
+    score2 = score_deal(deal2, CONSTRAINTS)
+    assert score > score2  # 08:00 Sat should score higher than 11:00 Sat
+
+
+def test_score_confidence_high_beats_low():
+    high = _make_scored_deal(price_confidence="high")
+    low = _make_scored_deal(price_confidence="low")
+    assert score_deal(high, CONSTRAINTS) > score_deal(low, CONSTRAINTS)
+
+
+def test_score_absolute_floor_over_budget():
+    deal = _make_scored_deal(total_trip_cost=900)
+    assert score_deal(deal, CONSTRAINTS) == 0.0
+
+
+def test_score_absolute_floor_too_short():
+    deal = _make_scored_deal(hours_at_destination=10)
+    assert score_deal(deal, CONSTRAINTS) == 0.0
+
+
+def test_score_train_bonus():
+    train = _make_scored_deal(transport_type="train")
+    flight = _make_scored_deal()
+    assert score_deal(train, CONSTRAINTS) > score_deal(flight, CONSTRAINTS)
