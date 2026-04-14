@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from orchestrator.source_router import fetch_flights, fetch_hotels
+from orchestrator.source_router import fetch_flights, fetch_flights_multi, fetch_hotels
 
 
 @pytest.fixture(autouse=True)
@@ -82,3 +82,22 @@ def test_fetch_hotels_falls_back_to_scraper():
         results = fetch_hotels("BOS", "Boston", "2026-04-17", "2026-04-19")
 
     assert results[0]["source"] == "booking.com"
+
+
+def test_fetch_flights_multi_collects_all_sources():
+    amadeus_results = [{"price_usd": 149, "source": "amadeus", "airline": "AA",
+                        "outbound_depart": "18:00", "outbound_arrive": "19:25"}]
+    kiwi_results = [{"price_usd": 155, "source": "kiwi", "airline": "AA",
+                     "outbound_depart": "18:00", "outbound_arrive": "19:20"}]
+
+    with patch("orchestrator.source_router._get_amadeus_client") as mock_a, \
+         patch("orchestrator.source_router._get_kiwi_client") as mock_k, \
+         patch("orchestrator.source_router._get_serpapi_client", return_value=None):
+        mock_a.return_value.search_flights.return_value = amadeus_results
+        mock_k.return_value.search_flights.return_value = kiwi_results
+        results = fetch_flights_multi("PHL", "BOS", "2026-04-17", "2026-04-19")
+
+    assert len(results) == 2
+    sources = {r["source"] for r in results}
+    assert "amadeus" in sources
+    assert "kiwi" in sources

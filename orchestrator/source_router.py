@@ -161,6 +161,38 @@ def _scraper_fetch_hotels(
 # Public API
 # ---------------------------------------------------------------------------
 
+def fetch_flights_multi(
+    origin: str,
+    dest_iata: str,
+    depart_date: str,
+    return_date: str,
+) -> list[dict]:
+    """Fetch flights from ALL available sources (for reconciliation).
+
+    Unlike fetch_flights which stops at the first successful source,
+    this collects results from every source that returns data.
+    Falls back to scrapers only if no API returned results.
+    """
+    all_results: list[dict] = []
+
+    for name, get_client in [("amadeus", _get_amadeus_client),
+                              ("kiwi", _get_kiwi_client),
+                              ("serpapi", _get_serpapi_client)]:
+        client = get_client()
+        if client is None:
+            continue
+        try:
+            results = client.search_flights(origin, dest_iata, depart_date, return_date)
+            all_results.extend(results)
+        except Exception as exc:
+            logger.warning("[source_router] %s multi-fetch failed: %s", name, exc)
+
+    if not all_results:
+        all_results = _scraper_fetch_flights(origin, dest_iata, depart_date, return_date)
+
+    return all_results
+
+
 def fetch_flights(
     origin: str,
     dest_iata: str,
