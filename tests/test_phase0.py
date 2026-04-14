@@ -78,3 +78,18 @@ def test_settings_defaults(monkeypatch):
     assert settings_module.USE_LOCAL_LLM is True
     assert settings_module.LOCAL_LLM_URL == "http://localhost:11434/api/chat"
     assert settings_module.LOCAL_LLM_MODEL == "llama3.1:8b"
+
+
+def test_api_settings_defaults(monkeypatch):
+    monkeypatch.delenv("AMADEUS_API_KEY", raising=False)
+    monkeypatch.delenv("AMADEUS_API_SECRET", raising=False)
+    monkeypatch.delenv("KIWI_API_KEY", raising=False)
+    monkeypatch.delenv("SERPAPI_API_KEY", raising=False)
+
+    import config.settings as settings_module
+    importlib.reload(settings_module)
+
+    assert settings_module.AMADEUS_API_KEY == ""
+    assert settings_module.AMADEUS_API_SECRET == ""
+    assert settings_module.KIWI_API_KEY == ""
+    assert settings_module.SERPAPI_API_KEY == ""

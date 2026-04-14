@@ -15,6 +15,12 @@ EMAIL_SENDER: str = os.getenv("EMAIL_SENDER", "")
 EMAIL_PASSWORD: str = os.getenv("EMAIL_PASSWORD", "")
 EMAIL_RECIPIENT: str = os.getenv("EMAIL_RECIPIENT", "")
 
+# Flight/Hotel APIs (optional — system falls back to scrapers if not set)
+AMADEUS_API_KEY: str = os.getenv("AMADEUS_API_KEY", "")
+AMADEUS_API_SECRET: str = os.getenv("AMADEUS_API_SECRET", "")
+KIWI_API_KEY: str = os.getenv("KIWI_API_KEY", "")
+SERPAPI_API_KEY: str = os.getenv("SERPAPI_API_KEY", "")
+
 # Dashboard server
 DASHBOARD_HOST: str = os.getenv("DASHBOARD_HOST", "127.0.0.1")
 DASHBOARD_PORT: int = int(os.getenv("DASHBOARD_PORT", "5050"))
