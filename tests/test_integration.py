@@ -156,15 +156,20 @@ async def test_llm_extracts_hotels_from_real_text():
 def test_scorer_ranks_correctly():
     deals = [
         {"total_trip_cost": 500, "layovers": 2, "best_stay": {"rating": 3.0},
-         "hours_at_destination": 20, "return_arrive": "21:45"},
+         "hours_at_destination": 20, "return_arrive": "21:45",
+         "outbound_depart": "18:00", "outbound_date": "2026-04-17"},
         {"total_trip_cost": 200, "layovers": 0, "best_stay": {"rating": 5.0},
-         "hours_at_destination": 48, "return_arrive": "18:00"},
+         "hours_at_destination": 48, "return_arrive": "18:00",
+         "outbound_depart": "18:00", "outbound_date": "2026-04-17"},
         {"total_trip_cost": 350, "layovers": 1, "best_stay": {"rating": 4.0},
-         "hours_at_destination": 36, "return_arrive": "19:30"},
+         "hours_at_destination": 36, "return_arrive": "19:30",
+         "outbound_depart": "18:00", "outbound_date": "2026-04-17"},
         {"total_trip_cost": 150, "layovers": 0, "best_stay": {"rating": 4.5},
-         "hours_at_destination": 40, "return_arrive": "19:00"},
+         "hours_at_destination": 40, "return_arrive": "19:00",
+         "outbound_depart": "18:00", "outbound_date": "2026-04-17"},
         {"total_trip_cost": 400, "layovers": 1, "best_stay": {"rating": 3.5},
-         "hours_at_destination": 30, "return_arrive": "20:00"},
+         "hours_at_destination": 30, "return_arrive": "20:00",
+         "outbound_depart": "18:00", "outbound_date": "2026-04-17"},
     ]
     scored = [(score_deal(d, CONSTRAINTS), i) for i, d in enumerate(deals)]
     scored.sort(reverse=True)

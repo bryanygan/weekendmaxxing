@@ -201,11 +201,13 @@ def test_score_train_gets_convenience_bonus():
         "total_trip_cost": 200, "layovers": 0,
         "best_stay": {"rating": 4.5}, "hours_at_destination": 48,
         "return_arrive": "19:00", "transport_type": "train",
+        "outbound_depart": "18:00", "outbound_date": "2026-04-17",
     }
     flight_deal = {
         "total_trip_cost": 200, "layovers": 0,
         "best_stay": {"rating": 4.5}, "hours_at_destination": 48,
         "return_arrive": "19:00",
+        "outbound_depart": "18:00", "outbound_date": "2026-04-17",
     }
     train_score = score_deal(train_deal, CONSTRAINTS)
     flight_score = score_deal(flight_deal, CONSTRAINTS)
@@ -218,11 +220,13 @@ def test_score_train_one_stop_less_penalized():
         "total_trip_cost": 200, "layovers": 1,
         "best_stay": {"rating": 4.0}, "hours_at_destination": 36,
         "return_arrive": "20:00", "transport_type": "train",
+        "outbound_depart": "18:00", "outbound_date": "2026-04-17",
     }
     flight_deal = {
         "total_trip_cost": 200, "layovers": 1,
         "best_stay": {"rating": 4.0}, "hours_at_destination": 36,
         "return_arrive": "20:00",
+        "outbound_depart": "18:00", "outbound_date": "2026-04-17",
     }
     train_score = score_deal(train_deal, CONSTRAINTS)
     flight_score = score_deal(flight_deal, CONSTRAINTS)
